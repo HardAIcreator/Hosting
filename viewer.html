@@ -1,0 +1,249 @@
+<!DOCTYPE html>
+<html lang="ru">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0, maximum-scale=1.0, user-scalable=no">
+    <title>IMBA VIEWER · просмотр фото</title>
+    <style>
+        * {
+            margin: 0;
+            padding: 0;
+            box-sizing: border-box;
+        }
+        body {
+            background: #000;
+            min-height: 100vh;
+            display: flex;
+            align-items: center;
+            justify-content: center;
+            font-family: -apple-system, system-ui, sans-serif;
+        }
+        .viewer {
+            width: 100%;
+            height: 100vh;
+            position: relative;
+            display: flex;
+            align-items: center;
+            justify-content: center;
+        }
+        #mainImage {
+            max-width: 100%;
+            max-height: 100%;
+            object-fit: contain;
+            cursor: pointer;
+        }
+        .tools {
+            position: fixed;
+            bottom: 30px;
+            left: 0;
+            width: 100%;
+            padding: 20px;
+            display: flex;
+            justify-content: center;
+            gap: 20px;
+            opacity: 0;
+            transition: 0.3s;
+            pointer-events: none;
+        }
+        .tools.visible {
+            opacity: 1;
+            pointer-events: auto;
+        }
+        .tool-btn {
+            width: 60px;
+            height: 60px;
+            background: rgba(30,30,40,0.8);
+            backdrop-filter: blur(10px);
+            border-radius: 30px;
+            display: flex;
+            align-items: center;
+            justify-content: center;
+            font-size: 28px;
+            color: white;
+            border: 1px solid rgba(255,255,255,0.1);
+            cursor: pointer;
+        }
+        .top-bar {
+            position: fixed;
+            top: 0;
+            left: 0;
+            width: 100%;
+            padding: 20px;
+            display: flex;
+            justify-content: space-between;
+            background: linear-gradient(180deg, rgba(0,0,0,0.8) 0%, transparent);
+            opacity: 0;
+            transition: 0.3s;
+            pointer-events: none;
+        }
+        .top-bar.visible {
+            opacity: 1;
+            pointer-events: auto;
+        }
+        .close-btn, .share-btn {
+            width: 44px;
+            height: 44px;
+            background: rgba(30,30,40,0.8);
+            backdrop-filter: blur(10px);
+            border-radius: 22px;
+            display: flex;
+            align-items: center;
+            justify-content: center;
+            font-size: 22px;
+            color: white;
+            cursor: pointer;
+        }
+        .error-screen {
+            position: fixed;
+            top: 0;
+            left: 0;
+            width: 100%;
+            height: 100%;
+            background: #0a0a0a;
+            display: flex;
+            flex-direction: column;
+            align-items: center;
+            justify-content: center;
+            color: white;
+            gap: 20px;
+            display: none;
+        }
+        .error-icon { font-size: 64px; }
+        .reload-btn {
+            background: #9d4edd;
+            color: white;
+            border: none;
+            padding: 15px 40px;
+            border-radius: 30px;
+            font-size: 16px;
+            cursor: pointer;
+        }
+    </style>
+</head>
+<body>
+    <div class="error-screen" id="errorScreen">
+        <div class="error-icon">😢</div>
+        <div>Фото не найдено</div>
+        <button class="reload-btn" onclick="goBack()">На главную</button>
+    </div>
+
+    <div class="viewer">
+        <img id="mainImage" src="" alt="photo" onclick="toggleZoom()">
+
+        <div class="top-bar" id="topBar">
+            <div class="close-btn" onclick="goBack()">←</div>
+            <div class="share-btn" onclick="shareImage()">↗️</div>
+        </div>
+
+        <div class="tools" id="tools">
+            <div class="tool-btn" onclick="downloadImage()">⬇️</div>
+            <div class="tool-btn" onclick="copyLink()">🔗</div>
+        </div>
+    </div>
+
+    <script>
+        const urlParams = new URLSearchParams(window.location.search);
+        const photoId = urlParams.get('id');
+        
+        let isZoomed = false;
+        let hideTimeout;
+
+        function loadImage() {
+            const photos = JSON.parse(localStorage.getItem('photos') || '{}');
+            const photoData = photos[photoId];
+            
+            if (photoData) {
+                document.getElementById('mainImage').src = photoData;
+                showUI();
+            } else {
+                document.getElementById('errorScreen').style.display = 'flex';
+            }
+        }
+
+        function showUI() {
+            document.getElementById('topBar').classList.add('visible');
+            document.getElementById('tools').classList.add('visible');
+            
+            clearTimeout(hideTimeout);
+            hideTimeout = setTimeout(hideUI, 3000);
+        }
+
+        function hideUI() {
+            document.getElementById('topBar').classList.remove('visible');
+            document.getElementById('tools').classList.remove('visible');
+        }
+
+        document.addEventListener('click', (e) => {
+            if (!e.target.closest('.tool-btn') && !e.target.closest('.close-btn') && !e.target.closest('.share-btn')) {
+                if (document.getElementById('topBar').classList.contains('visible')) {
+                    hideUI();
+                } else {
+                    showUI();
+                }
+            }
+        });
+
+        function toggleZoom() {
+            const img = document.getElementById('mainImage');
+            if (!isZoomed) {
+                img.style.transform = 'scale(2)';
+                isZoomed = true;
+                hideUI();
+            } else {
+                img.style.transform = 'scale(1)';
+                isZoomed = false;
+                showUI();
+            }
+        }
+
+        function downloadImage() {
+            const link = document.createElement('a');
+            link.download = 'photo.jpg';
+            link.href = document.getElementById('mainImage').src;
+            link.click();
+            showToast('⬇️ Скачивание...');
+        }
+
+        function shareImage() {
+            if (navigator.share) {
+                navigator.share({
+                    title: 'Фото',
+                    url: window.location.href
+                });
+            } else {
+                copyLink();
+            }
+        }
+
+        function copyLink() {
+            navigator.clipboard.writeText(window.location.href);
+            showToast('🔗 Ссылка скопирована');
+        }
+
+        function goBack() {
+            window.location.href = 'index.html';
+        }
+
+        function showToast(text) {
+            const toast = document.createElement('div');
+            toast.textContent = text;
+            toast.style.cssText = `
+                position: fixed;
+                bottom: 100px;
+                left: 50%;
+                transform: translateX(-50%);
+                background: rgba(0,0,0,0.8);
+                color: white;
+                padding: 12px 24px;
+                border-radius: 40px;
+                z-index: 1000;
+                border: 1px solid #9d4edd;
+            `;
+            document.body.appendChild(toast);
+            setTimeout(() => toast.remove(), 2000);
+        }
+
+        loadImage();
+    </script>
+</body>
+</html>
